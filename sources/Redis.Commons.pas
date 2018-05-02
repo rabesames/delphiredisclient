@@ -142,6 +142,9 @@ type
     procedure SUBSCRIBE(const AChannels: array of string;
       ACallback: TProc<string, string>;
       ATimeoutCallback: TRedisTimeoutCallback = nil);
+    procedure PSUBSCRIBE(const AChannels: array of string;
+      ACallback: TProc<string, string, string>;
+      AContinueOnTimeoutCallback: TRedisTimeoutCallback = nil);
     function PUBLISH(const AChannel: string; AMessage: string): Integer;
     // transactions
     function MULTI(ARedisTansactionProc: TRedisTransactionProc): TArray<string>; overload;

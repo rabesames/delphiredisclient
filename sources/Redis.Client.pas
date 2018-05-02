@@ -113,6 +113,9 @@ type
     procedure SUBSCRIBE(const AChannels: array of string;
       ACallback: TProc<string, string>;
       AContinueOnTimeoutCallback: TRedisTimeoutCallback = nil);
+    procedure PSUBSCRIBE(const AChannels: array of string;
+      ACallback: TProc<string, string, string>;
+      AContinueOnTimeoutCallback: TRedisTimeoutCallback = nil);
     function PUBLISH(const AChannel: string; AMessage: string): Integer;
     // sets
     function SADD(const AKey, AValue: TBytes): Integer; overload;
@@ -945,6 +948,50 @@ begin
       end;
   else
     raise ERedisException.Create('Not a String response');
+  end;
+end;
+
+procedure TRedisClient.PSUBSCRIBE(const AChannels: array of string; ACallback: TProc<string, string, string>; AContinueOnTimeoutCallback: TRedisTimeoutCallback);
+var
+  I: Integer;
+  lChannel, lValue, lPattern: string;
+  lArr: TArray<string>;
+  lContinue: boolean;
+begin
+  FNextCMD := GetCmdList('PSUBSCRIBE');
+  FNextCMD.AddRange(AChannels);
+  FTCPLibInstance.SendCmd(FNextCMD);
+  SetCommandTimeout(RedisDefaultSubscribeTimeout);
+  for I := 0 to Length(AChannels) - 1 do
+  begin
+    lArr := ParseArrayResponse(FValidResponse);
+    if (lArr[0].ToLower <> 'psubscribe') or (lArr[1] <> AChannels[I]) then
+      raise ERedisException.Create('Invalid response: ' + string.Join('-', lArr))
+  end;
+  while True do
+  begin
+    lArr := ParseArrayResponse(FValidResponse);
+    if FTCPLibInstance.LastReadWasTimedOut then
+    begin
+      if Assigned(AContinueOnTimeoutCallback) then
+      begin
+        lContinue := AContinueOnTimeoutCallback();
+        if not lContinue then
+        begin
+          break;
+        end;
+      end;
+    end
+    else
+    begin
+      if (not FValidResponse) or (lArr[0] <> 'pmessage') then
+        raise ERedisException.CreateFmt('Invalid reply: %s',
+          [string.Join('-', lArr)]);
+      lPattern := lArr[1];
+      lChannel := lArr[2];
+      lValue := lArr[3];
+      ACallback(lPattern, lChannel, lValue);
+    end;
   end;
 end;
 
